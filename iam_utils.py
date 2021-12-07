@@ -131,7 +131,8 @@ class WidgetPlot(VBox):
                 self._fig, self.ax_ = fig_ax
             else:
                 self._fig, self._ax = plt.subplots(1, 1, figsize=(4,3), tight_layout=True)                        
-            self._fig.canvas.toolbar_visible = False
+            self._fig.canvas.toolbar_visible = True
+            
             self._fig.canvas.header_visible = False
             self._fig.canvas.footer_visible = False            
             plt.show(self._fig)            
@@ -152,7 +153,7 @@ class WidgetPlot(VBox):
         
         
 class WidgetCodeCheck(VBox):
-    def __init__(self, wci, ref_values, demo=None):        
+    def __init__(self, wci, ref_values, demo=None, ref_match=np.allclose):        
         
         self._wci = wci
         self._demo = demo
@@ -164,6 +165,7 @@ class WidgetCodeCheck(VBox):
         self._button.on_click(self.update)
         self._validation_text = HTML(value="")
         self._ref_values = ref_values
+        self._ref_match = ref_match
 
         super(WidgetCodeCheck, self).__init__()
         
@@ -177,7 +179,7 @@ class WidgetCodeCheck(VBox):
         allx = ()
         for x, y in self._ref_values.items():
             allx += x
-            if not np.allclose(y, user_fun(*x)):
+            if not self._ref_match(y, user_fun(*x)):
                 nfail += 1         
                 
         self._validation_text.value = "&nbsp;"*4
@@ -189,4 +191,17 @@ class WidgetCodeCheck(VBox):
     def update(self, change={'type': 'change'}):
         self.check()
         if self._demo is not None:
-            self._demo.update()          
+            self._demo.update()     
+
+class WidgetUpdater(Output):
+    """Mini-wrapper to provide an output space that gets updated by calling a function, 
+    e.g. to print some output or reload a widget. """
+    
+    def __init__(self, updater, **kwargs):
+        self._updater = updater
+        super(WidgetUpdater, self).__init__()
+        
+    def update(self):
+        self.clear_output()
+        with self:
+            self._updater()            
