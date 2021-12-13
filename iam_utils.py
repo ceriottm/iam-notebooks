@@ -1,9 +1,13 @@
 import numpy as np
 import matplotlib as mpl
+import json
 import matplotlib.pyplot as plt
+from IPython.display import clear_output
 from ipywidgets import (Output, FloatSlider, Box, HBox, VBox, Layout, Checkbox,
-                        Button, HTML)
+                        Button, HTML, Text)
 import traitlets
+
+global_variable = 1.0
 
 def float_make_canonical(key, default, minval=None, maxval=None, step=None, desc=None, *args):
     # gets the (possibly incomplete) options for a float value, and completes as needed
@@ -124,32 +128,29 @@ class WidgetPlot(VBox):
         self._args = fixed_args
         self._pars = parbox
         self._plotter = plotter
+        self._plot = Output()
         
-        self._plot = Output()       
-        with self._plot:
+        super(WidgetPlot, self).__init__([self._pars, self._plot])
+        
+        with self._plot:                               
             if fig_ax is not None:
-                self._fig, self.ax_ = fig_ax
+                self._fig, self._ax = fig_ax
             else:
-                self._fig, self._ax = plt.subplots(1, 1, figsize=(4,3), tight_layout=True)                        
-            self._fig.canvas.toolbar_visible = True
-            
+                self._fig, self._ax = plt.subplots(1, 1, figsize=(4,3), tight_layout=True)                
+            self._fig.canvas.toolbar_visible = True            
             self._fig.canvas.header_visible = False
-            self._fig.canvas.footer_visible = False            
-            plt.show(self._fig)            
-
-        super(WidgetPlot, self).__init__()        
-        # TODO: handle notebook backend or widgets, so that this shows correctly in appmode and in jupyterlab
-        if mpl.get_backend() == 'nbAgg':
-            self.children = [self._pars, self._plot]
-        else:
-            self.children = [self._pars, self._plot]
+            self._fig.canvas.footer_visible = False                            
+            plt.show(self._fig.canvas)        
+                
         self._pars.observe(self.update)
-        self.update()
+        self.update()                    
             
     def update(self, change={'type': 'change'}):
-        self._ax.clear()
+        if self._ax.has_data():
+            self._ax.clear()        
         self._plotter(self._ax, **self._pars.value, **self._args)
-        self._fig.canvas.draw()
+        #self._fig.canvas.draw()
+        #self._fig.canvas.flush_events()
         
         
 class WidgetCodeCheck(VBox):
@@ -166,22 +167,28 @@ class WidgetCodeCheck(VBox):
         self._validation_text = HTML(value="")
         self._ref_values = ref_values
         self._ref_match = ref_match
-
-        super(WidgetCodeCheck, self).__init__()
         
-        self.children = [wci, HBox([self._button, self._validation_text], layout=Layout(align_items='center'))]
+        self._err = Output()
+        super(WidgetCodeCheck, self).__init__([wci, 
+                                               HBox([self._button, self._validation_text],
+                                                    layout=Layout(align_items='center')),
+                                               self._err
+                                              ])
+        
         if demo is not None:
             self.children += (demo,)                
             
-    def check(self):        
-        user_fun = self._wci.get_function_object()
+    def check(self):
+        self._err.clear_output()
         nfail = 0
-        allx = ()
-        for x, y in self._ref_values.items():
-            allx += x
-            if not self._ref_match(y, user_fun(*x)):
-                nfail += 1         
-                
+        allx = ()            
+        with self._err:
+            user_fun = self._wci.get_function_object()
+            for x, y in self._ref_values.items():
+                allx += x
+                if not self._ref_match(y, user_fun(*x)):
+                    nfail += 1         
+
         self._validation_text.value = "&nbsp;"*4
         if nfail==0:
             self._validation_text.value += f"<span style='color:green'> All tests passed!   Exercise code: { hash(allx)} </style>" 
@@ -204,4 +211,39 @@ class WidgetUpdater(Output):
     def update(self):
         self.clear_output()
         with self:
-            self._updater()            
+            self._updater()       
+
+class WidgetDataDumper(HBox):
+    """
+    A widget to enter the name of the learner, and to save the state of selected  
+    widgets to a .json file, and load them back afterwards.    
+    """
+    
+    def _save_all(self, change=""):
+        js = dict()
+        for f_id, f_val in self._fields.items():
+            js[f_id] = getattr(f_val[0], f_val[1])
+        jsname = self._prefix+"-"+self._sname.value.replace(" ","")+".json"
+        json.dump(js, open(jsname, "w"))
+
+    def _load_all(self, change=""):
+        jsname = self._prefix+"-"+self._sname.value.replace(" ","")+".json"        
+        js = json.load(open(jsname, "r"))
+        for f_id, f_val in js.items():
+            if not f_id in self._fields:
+                raise ValueError(f"Field ID {f_id} in the data dump is not registered.")
+            setattr(self._fields[f_id][0], self._fields[f_id][1], f_val)
+
+    def __init__(self, prefix="dump"):
+        self._prefix = prefix
+        
+        self._bsave = Button(description="Save all")
+        self._bload = Button(description="Load all")
+        self._sname = Text(description="Name")
+        super(WidgetDataDumper, self).__init__([self._sname, self._bsave, self._bload])
+        self._bsave.on_click(self._save_all)
+        self._bload.on_click(self._load_all)
+        self._fields = {}
+    
+    def register_field(self, field_id, widget, trait):
+        self._fields[field_id] = (widget, trait)
