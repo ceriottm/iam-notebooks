@@ -168,7 +168,7 @@ class WidgetCodeCheck(VBox):
         self._ref_values = ref_values
         self._ref_match = ref_match
         
-        self._err = Output()
+        self._err = Output(layout=Layout(width='100%', height='100%'))
         super(WidgetCodeCheck, self).__init__([wci, 
                                                HBox([self._button, self._validation_text],
                                                     layout=Layout(align_items='center')),
@@ -181,22 +181,30 @@ class WidgetCodeCheck(VBox):
     def check(self):
         self._err.clear_output()
         nfail = 0
-        allx = ()            
-        with self._err:
+        allx = ()
+        f_error = False
+        with self._err:            
             user_fun = self._wci.get_function_object()
-            for x, y in self._ref_values.items():
-                allx += x
-                if not self._ref_match(y, user_fun(*x)):
-                    nfail += 1         
+            try:
+                for x, y in self._ref_values.items():
+                    allx += x
+                    if not self._ref_match(y, user_fun(*x)):
+                        nfail += 1         
+            except:
+                f_error = True
+                raise
 
         self._validation_text.value = "&nbsp;"*4
         if nfail==0:
             self._validation_text.value += f"<span style='color:green'> All tests passed!   Exercise code: { hash(allx)} </style>" 
         else:
             self._validation_text.value += f"   {nfail} out of {len(self._ref_values)} tests failed."
+        return f_error
         
-    def update(self, change={'type': 'change'}):
-        self.check()
+    def update(self, change={'type': 'change'}):        
+        if self.check() is True:
+            # don't trigger further errors if the check failed
+            return
         if self._demo is not None:
             self._demo.update()     
 
