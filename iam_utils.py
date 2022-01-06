@@ -146,7 +146,7 @@ class WidgetPlot(VBox):
         self.update()                    
             
     def update(self, change={'type': 'change'}):
-        if self._ax.has_data():
+        if self._ax.has_data() or len(self._ax.artists)>0:
             self._ax.clear()        
         self._plotter(self._ax, **self._pars.value, **self._args)
         #self._fig.canvas.draw()
