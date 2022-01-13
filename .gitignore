@@ -1,0 +1,7 @@
+.*
+*.pyc
+*.pyo
+*.x
+ex*.json
+__pycache__
+.ipynb_checkpoints
