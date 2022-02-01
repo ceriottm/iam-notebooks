@@ -66,9 +66,11 @@ class WidgetParbox(VBox):
     
     value = traitlets.Dict({}, sync=True)
     
-    def __init__(self, **kwargs):
+    def __init__(self, onchange=None, **kwargs):
         self._controls = {}
         for k, v in kwargs.items():
+            if k == "onchange":
+                continue
             if type(v) is tuple:
                 if type(v[0]) is float:
                     val, min, max, step, desc = float_make_canonical(k, *v)
@@ -95,6 +97,8 @@ class WidgetParbox(VBox):
         for k in self._controls:
             self._controls[k].observe(self._parameter_handler(k), 'value')
             self.value[k] = self._controls[k].value
+        if onchange is not None:
+            self.observe(onchange)
         
     def _parameter_handler(self, k):
         def _update_parameter(change):
