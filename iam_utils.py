@@ -3,7 +3,8 @@ import matplotlib as mpl
 import json
 import matplotlib.pyplot as plt
 from IPython.display import clear_output
-from ipywidgets import (Output, FloatSlider, Box, HBox, VBox, Layout, Checkbox,
+from ipywidgets import (Output, FloatSlider, IntSlider,
+                        Box, HBox, VBox, Layout, Checkbox,
                         Button, HTML, Text)
 import traitlets
 
@@ -21,6 +22,22 @@ def float_make_canonical(key, default, minval=None, maxval=None, step=None, desc
         desc = key
     if len(args)>0:
         raise ValueError("Too many options for a float parameter")
+    return default, minval, maxval, step, desc
+
+def int_make_canonical(key, default, minval=None, maxval=None, step=None, desc=None, *args):
+    # gets the (possibly incomplete) options for a int value, and completes as needed    
+    if minval is None:
+        minval = min(default, 0)
+    if maxval is None:
+        maxval = max(default, 10)
+    if step is None:
+        step = 1
+    if desc is None:
+        desc = key
+    if len(args)>0:
+        raise ValueError("Too many options for a int parameter")
+    if type(minval) is not int or  type(maxval) is not int or type(step) is not int:
+        raise ValueError("Float option for an int parameter")
     return default, minval, maxval, step, desc
 
 def bool_make_canonical(key, default, desc=None, *args):
@@ -75,6 +92,12 @@ class WidgetParbox(VBox):
                 if type(v[0]) is float:
                     val, min, max, step, desc = float_make_canonical(k, *v)
                     self._controls[k] = FloatSlider( value=val, min=min, max=max, step=step,
+                                                    description=desc, continuous_update=False, 
+                                                    style={'description_width': 'initial'}, 
+                                                    layout=Layout(width='50%', min_width='5in'))   
+                elif type(v[0]) is int:
+                    val, min, max, step, desc = int_make_canonical(k, *v)                    
+                    self._controls[k] = IntSlider( value=val, min=min, max=max, step=step,
                                                     description=desc, continuous_update=False, 
                                                     style={'description_width': 'initial'}, 
                                                     layout=Layout(width='50%', min_width='5in'))   
