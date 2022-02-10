@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib as mpl
 import json
 import matplotlib.pyplot as plt
+from collections.abc import Iterable
 from IPython.display import clear_output
 from ipywidgets import (Output, FloatSlider, IntSlider,
                         Box, HBox, VBox, Layout, Checkbox,
@@ -173,8 +174,14 @@ class WidgetPlot(VBox):
         self.update()                    
             
     def update(self, change={'type': 'change'}):
-        if self._ax.has_data() or len(self._ax.artists)>0:
-            self._ax.clear()        
+        if isinstance(self._ax, Iterable):
+            axes = self._ax
+        else:
+            axes = [self._ax]
+        for ax in axes:
+            if ax.has_data() or len(ax.artists)>0:
+                ax.clear()
+
         self._plotter(self._ax, **self._pars.value, **self._args)
         #self._fig.canvas.draw()
         #self._fig.canvas.flush_events()
