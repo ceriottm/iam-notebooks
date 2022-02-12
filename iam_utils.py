@@ -11,7 +11,7 @@ import traitlets
 
 global_variable = 1.0
 
-def float_make_canonical(key, default, minval=None, maxval=None, step=None, desc=None, *args):
+def float_make_canonical(key, default, minval=None, maxval=None, step=None, desc=None, slargs=None, *args):
     # gets the (possibly incomplete) options for a float value, and completes as needed
     if minval is None:
         minval = min(default, 0)
@@ -21,11 +21,13 @@ def float_make_canonical(key, default, minval=None, maxval=None, step=None, desc
         step = (maxval-minval)/100
     if desc is None:
         desc = key
+    if slargs is None:
+        slargs = {}
     if len(args)>0:
         raise ValueError("Too many options for a float parameter")
-    return default, minval, maxval, step, desc
+    return default, minval, maxval, step, desc, slargs
 
-def int_make_canonical(key, default, minval=None, maxval=None, step=None, desc=None, *args):
+def int_make_canonical(key, default, minval=None, maxval=None, step=None, desc=None, slargs=None, *args):
     # gets the (possibly incomplete) options for a int value, and completes as needed    
     if minval is None:
         minval = min(default, 0)
@@ -35,19 +37,23 @@ def int_make_canonical(key, default, minval=None, maxval=None, step=None, desc=N
         step = 1
     if desc is None:
         desc = key
+    if slargs is None:
+        slargs = {}        
     if len(args)>0:
         raise ValueError("Too many options for a int parameter")
     if type(minval) is not int or  type(maxval) is not int or type(step) is not int:
         raise ValueError("Float option for an int parameter")
-    return default, minval, maxval, step, desc
+    return default, minval, maxval, step, desc, slargs
 
-def bool_make_canonical(key, default, desc=None, *args):
+def bool_make_canonical(key, default, desc=None, slargs=None, *args):
     # gets the (possibly incomplete) options for a bool value, and completes as needed
     if desc is None:
         desc = key
+    if slargs is None:
+        slargs = {}        
     if len(args)>0:
         raise ValueError("Too many options for a bool parameter")
-    return default, desc
+    return default, desc, slargs
 
 class WidgetParbox(VBox):
     """ Parameter box widget.
@@ -67,6 +73,9 @@ class WidgetParbox(VBox):
             TODO: add more
             Alternatively, one can pass any control widget that contains a value, e.g.
             `parameter = FloatSlider( ... )`
+        onchange: function (default: None)
+            If set, calls this function whenever the parameters are changed. Updates can be monitored
+            also from outside, by observing the widget.
 
         Attributes
         ----------
@@ -77,8 +86,12 @@ class WidgetParbox(VBox):
         --------
         >>> parbox = ParameterBox( par_1 = (0.1, 0, 1, 0.01, "parameter 1"), 
                                    par_2 = (True, "parameter 2) )
-        >>> parbox.parameters()
+        >>> parbox.value
         { par_1 : 0.1, par_2 : True }        
+        
+        >>> def update(change={'type':'change'}):
+                print(parbox.value['par_1'])
+            parbox.observe(update)
         
     """
     
@@ -91,22 +104,25 @@ class WidgetParbox(VBox):
                 continue
             if type(v) is tuple:
                 if type(v[0]) is float:
-                    val, min, max, step, desc = float_make_canonical(k, *v)
+                    val, min, max, step, desc, slargs = float_make_canonical(k, *v)
                     self._controls[k] = FloatSlider( value=val, min=min, max=max, step=step,
                                                     description=desc, continuous_update=False, 
                                                     style={'description_width': 'initial'}, 
-                                                    layout=Layout(width='50%', min_width='5in'))   
+                                                    layout=Layout(width='50%', min_width='5in'),
+                                                    **slargs)   
                 elif type(v[0]) is int:
-                    val, min, max, step, desc = int_make_canonical(k, *v)                    
+                    val, min, max, step, desc, slargs = int_make_canonical(k, *v)                    
                     self._controls[k] = IntSlider( value=val, min=min, max=max, step=step,
                                                     description=desc, continuous_update=False, 
                                                     style={'description_width': 'initial'}, 
-                                                    layout=Layout(width='50%', min_width='5in'))   
+                                                    layout=Layout(width='50%', min_width='5in'),
+                                                    **slargs)   
                 elif type(v[0]) is bool:
-                    val, desc = bool_make_canonical(k, *v)
+                    val, desc, slargs = bool_make_canonical(k, *v)
                     self._controls[k] = Checkbox(value = val, description=desc, continuous_update=False, 
                                                   style={'description_width': 'initial'}, 
-                                                  layout=Layout(width='50%', min_width='5in')
+                                                  layout=Layout(width='50%', min_width='5in'),
+                                                  **slargs
                                                 )
                 else:
                     raise ValueError("Unsupported parameter type")
@@ -151,14 +167,17 @@ class WidgetPlot(VBox):
         Parameters that are passed to plotter() without being associated to an interactive widgtet        
     """
     
-    def __init__(self, plotter, parbox, fixed_args={}, fig_ax = None):
+    def __init__(self, plotter, parbox=None, fixed_args={}, fig_ax = None):
         
         self._args = fixed_args
         self._pars = parbox
         self._plotter = plotter
         self._plot = Output()
         
-        super(WidgetPlot, self).__init__([self._pars, self._plot])
+        if self._pars is not None:
+            super(WidgetPlot, self).__init__([self._pars, self._plot])
+        else:
+            super(WidgetPlot, self).__init__([self._plot])
         
         with self._plot:                               
             if fig_ax is not None:
@@ -170,7 +189,8 @@ class WidgetPlot(VBox):
             self._fig.canvas.footer_visible = False                            
             plt.show(self._fig.canvas)        
                 
-        self._pars.observe(self.update)
+        if self._pars is not None:
+            self._pars.observe(self.update)
         self.update()                    
             
     def update(self, change={'type': 'change'}):
@@ -182,7 +202,10 @@ class WidgetPlot(VBox):
             if ax.has_data() or len(ax.artists)>0:
                 ax.clear()
 
-        self._plotter(self._ax, **self._pars.value, **self._args)
+        if self._pars is not None:
+            self._plotter(self._ax, **self._pars.value, **self._args)
+        else:
+            self._plotter(self._ax, **self._args)
         #self._fig.canvas.draw()
         #self._fig.canvas.flush_events()
         
