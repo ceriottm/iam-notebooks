@@ -233,7 +233,10 @@ class WidgetCodeCheck(VBox):
                                               ])
         
         if demo is not None:
-            self.children += (demo,)                
+            if isinstance(demo, Iterable):
+                self.children += demo
+            else:
+                self.children += (demo,)
             
     def check(self):
         self._err.clear_output()
@@ -263,7 +266,11 @@ class WidgetCodeCheck(VBox):
             # don't trigger further errors if the check failed
             return
         if self._demo is not None:
-            self._demo.update()     
+            if not(isinstance(self._demo, Iterable)):
+                demos = [self._demo]
+            for demo in demos:
+                if hasattr(demo, 'update'):
+                    demo.update()
 
 class WidgetUpdater(Output):
     """Mini-wrapper to provide an output space that gets updated by calling a function, 
