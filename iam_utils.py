@@ -266,8 +266,9 @@ class WidgetCodeCheck(VBox):
             # don't trigger further errors if the check failed
             return
         if self._demo is not None:
-            if not(isinstance(self._demo, Iterable)):
-                demos = [self._demo]
+            demos = self._demo
+            if not(isinstance(demos, Iterable)):
+                demos = [demos]
             for demo in demos:
                 if hasattr(demo, 'update'):
                     demo.update()
