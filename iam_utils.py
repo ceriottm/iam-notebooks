@@ -243,24 +243,25 @@ class WidgetCodeCheck(VBox):
         nfail = 0
         allx = ()
         f_error = False
-        with self._err:            
+        with self._err:
             user_fun = self._wci.get_function_object()
             try:
                 for x, y in self._ref_values.items():
                     allx += x
                     if not self._ref_match(y, user_fun(*x)):
-                        nfail += 1         
+                        nfail += 1
             except:
+                nfail = len(self._ref_values)
                 f_error = True
                 raise
 
         self._validation_text.value = "&nbsp;"*4
         if nfail==0:
-            self._validation_text.value += f"<span style='color:green'> All tests passed!   Exercise code: { hash(allx)} </style>" 
+            self._validation_text.value += f"<span style='color:green'> All tests passed!</style>"
         else:
             self._validation_text.value += f"   {nfail} out of {len(self._ref_values)} tests failed."
         return f_error
-        
+
     def update(self, change={'type': 'change'}):        
         if self.check() is True:
             # don't trigger further errors if the check failed
