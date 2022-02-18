@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib as mpl
 import json
 import os
+import sys
 import matplotlib.pyplot as plt
 from collections.abc import Iterable
 from IPython.display import clear_output
@@ -239,7 +240,7 @@ class WidgetCodeCheck(VBox):
                 self.children += demo
             else:
                 self.children += (demo,)
-            
+ 
     def check(self):
         self._err.clear_output()
         nfail = 0
@@ -256,6 +257,24 @@ class WidgetCodeCheck(VBox):
             except Exception as e:
                 nfail = len(self._ref_values)
                 f_error = True
+                # because some errors in code widgets do not print the
+                # traceback correctly, we print the last step manually
+                tb = sys.exc_info()[2]
+                while not(tb.tb_next is None):
+                    tb = tb.tb_next
+                if (tb.tb_frame.f_code.co_name == self._wci.function_name):
+                    # index = line-1
+                    line_number = tb.tb_lineno-1
+                    code = (self._wci.function_name +
+                            '"""\n' + self._wci.docstring + '"""\n' +
+                            self._wci.function_body).splitlines()
+                    error = f"<widget_code_input.widget_code_input in {self._wci.function_name}({self._wci.function_parameters})\n"
+                    for i in range(max(0, line_number-2), min(len(code), line_number+3)):
+                        if i == line_number:
+                            error += f"----> {i} {code[i]}\n"
+                        else:
+                            error += f"      {i} {code[i]}\n"
+                    e.args = (str(e.args[0]) + "\n\n" + error,)
                 raise e
 
         self._validation_text.value = "&nbsp;"*4
