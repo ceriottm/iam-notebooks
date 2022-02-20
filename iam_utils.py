@@ -1,12 +1,14 @@
 import numpy as np
 import matplotlib as mpl
 import json
+import os
+import sys
 import matplotlib.pyplot as plt
 from collections.abc import Iterable
 from IPython.display import clear_output
 from ipywidgets import (Output, FloatSlider, IntSlider,
                         Box, HBox, VBox, Layout, Checkbox,
-                        Button, HTML, Text)
+                        Button, HTML, Text, Label)
 import traitlets
 
 global_variable = 1.0
@@ -106,7 +108,8 @@ class WidgetParbox(VBox):
                 if type(v[0]) is float:
                     val, min, max, step, desc, slargs = float_make_canonical(k, *v)
                     self._controls[k] = FloatSlider( value=val, min=min, max=max, step=step,
-                                                    description=desc, continuous_update=False, 
+                                                    description=desc, continuous_update=False,
+                                                    readout_format='.3f',
                                                     style={'description_width': 'initial'}, 
                                                     layout=Layout(width='50%', min_width='5in'),
                                                     **slargs)   
@@ -237,27 +240,46 @@ class WidgetCodeCheck(VBox):
                 self.children += demo
             else:
                 self.children += (demo,)
-            
+ 
     def check(self):
         self._err.clear_output()
         nfail = 0
         allx = ()
         f_error = False
         with self._err:
-            user_fun = self._wci.get_function_object()
             try:
+                user_fun = self._wci.get_function_object()
                 for x, y in self._ref_values.items():
                     allx += x
-                    if not self._ref_match(y, user_fun(*x)):
+                    out = user_fun(*x)
+                    if not self._ref_match(y, out):
                         nfail += 1
-            except:
+            except Exception as e:
                 nfail = len(self._ref_values)
                 f_error = True
-                raise
+                # because some errors in code widgets do not print the
+                # traceback correctly, we print the last step manually
+                tb = sys.exc_info()[2]
+                while not(tb.tb_next is None):
+                    tb = tb.tb_next
+                if (tb.tb_frame.f_code.co_name == self._wci.function_name):
+                    # index = line-1
+                    line_number = tb.tb_lineno-1
+                    code = (self._wci.function_name +
+                            '"""\n' + self._wci.docstring + '"""\n' +
+                            self._wci.function_body).splitlines()
+                    error = f"<widget_code_input.widget_code_input in {self._wci.function_name}({self._wci.function_parameters})\n"
+                    for i in range(max(0, line_number-2), min(len(code), line_number+3)):
+                        if i == line_number:
+                            error += f"----> {i} {code[i]}\n"
+                        else:
+                            error += f"      {i} {code[i]}\n"
+                    e.args = (str(e.args[0]) + "\n\n" + error,)
+                raise e
 
         self._validation_text.value = "&nbsp;"*4
         if nfail==0:
-            self._validation_text.value += f"<span style='color:green'> All tests passed!</style>"
+           self._validation_text.value += f"<span style='color:green'> All tests passed!</style>"
         else:
             self._validation_text.value += f"   {nfail} out of {len(self._ref_values)} tests failed."
         return f_error
@@ -287,37 +309,79 @@ class WidgetUpdater(Output):
         with self:
             self._updater()       
 
-class WidgetDataDumper(HBox):
+class WidgetDataDumper(VBox):
     """
     A widget to enter the name of the learner, and to save the state of selected  
     widgets to a .json file, and load them back afterwards.    
     """
-    
+    def _clear_output(self):
+        self._output.clear_output()
+        self._overwrite_buttons.close()
+        self._overwrite_prompt.close()
+
     def _save_all(self, change=""):
+        self._clear_output()
         js = dict()
         for f_id, f_val in self._fields.items():
             js[f_id] = getattr(f_val[0], f_val[1])
         jsname = self._prefix+"-"+self._sname.value.replace(" ","")+".json"
-        json.dump(js, open(jsname, "w"))
+        if not(os.path.exists(jsname)):
+            json.dump(js, open(jsname, "w"))
+        else:
+            self._yes_overwrite_button = Button(description="Yes")
+            self._no_overwrite_button = Button(description="No")
+            self._overwrite_buttons = HBox([self._yes_overwrite_button, self._no_overwrite_button])
+            self._overwrite_prompt = Label(f"File {jsname} already exist. Should it be overwritten?")
+            def no_overwrite(change=""):
+                self._overwrite_prompt.close()
+                self._overwrite_buttons.close()
+                with self._output:
+                    print("Not written.")
+            def yes_overwrite(change=""):
+                json.dump(js, open(jsname, "w"))
+                self._overwrite_prompt.close()
+                self._overwrite_buttons.close()
+                with self._output:
+                    print(f"{jsname} overwritten.")
+            self._yes_overwrite_button.on_click(yes_overwrite)
+            self._no_overwrite_button.on_click(no_overwrite)
+            display(self._overwrite_prompt)
+            display(self._overwrite_buttons)
 
     def _load_all(self, change=""):
-        jsname = self._prefix+"-"+self._sname.value.replace(" ","")+".json"        
+        self._clear_output()
+        jsname = self._prefix+"-"+self._sname.value.replace(" ","")+".json"
+        if not(os.path.exists(jsname)):
+            with self._output:
+                raise FileNotFoundError(f"Solution file {jsname} not found")
+            return
         js = json.load(open(jsname, "r"))
         for f_id, f_val in js.items():
             if not f_id in self._fields:
-                raise ValueError(f"Field ID {f_id} in the data dump is not registered.")
+                with self._output:
+                    raise ValueError(f"Field ID {f_id} in the data dump is not registered.")
             setattr(self._fields[f_id][0], self._fields[f_id][1], f_val)
+        with self._output:
+            print(f"Succesfully loaded file {jsname}")
 
     def __init__(self, prefix="dump"):
         self._prefix = prefix
-        
+
         self._bsave = Button(description="Save all")
         self._bload = Button(description="Load all")
         self._sname = Text(description="Name")
-        super(WidgetDataDumper, self).__init__([self._sname, self._bsave, self._bload])
         self._bsave.on_click(self._save_all)
         self._bload.on_click(self._load_all)
         self._fields = {}
+        self._output_label = Label()
+        self._output = Output(layout=Layout(width='100%', height='100%'))
+        super(WidgetDataDumper, self).__init__(
+                [HBox([self._sname, self._bsave, self._bload]), self._output])
+
+        self._yes_overwrite_button = Button(description="Yes")
+        self._no_overwrite_button = Button(description="No")
+        self._overwrite_prompt = Label(f"")
+        self._overwrite_buttons = HBox([self._yes_overwrite_button, self._no_overwrite_button])
     
     def register_field(self, field_id, widget, trait):
         self._fields[field_id] = (widget, trait)
