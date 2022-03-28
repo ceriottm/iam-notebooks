@@ -109,7 +109,6 @@ class WidgetParbox(VBox):
                     val, min, max, step, desc, slargs = float_make_canonical(k, *v)
                     self._controls[k] = FloatSlider( value=val, min=min, max=max, step=step,
                                                     description=desc, continuous_update=False,
-                                                    readout_format='.3f',
                                                     style={'description_width': 'initial'}, 
                                                     layout=Layout(width='50%', min_width='5in'),
                                                     **slargs)   
@@ -279,7 +278,7 @@ class WidgetCodeCheck(VBox):
 
         self._validation_text.value = "&nbsp;"*4
         if nfail==0:
-           self._validation_text.value += f"<span style='color:green'> All tests passed!</style>"
+            self._validation_text.value += f"<span style='color:green'> All tests passed!</style>"
         else:
             self._validation_text.value += f"   {nfail} out of {len(self._ref_values)} tests failed."
         return f_error
