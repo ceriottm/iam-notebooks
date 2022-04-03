@@ -301,9 +301,9 @@ class WidgetUpdater(Output):
     
     def __init__(self, updater, **kwargs):
         self._updater = updater
-        super(WidgetUpdater, self).__init__()
+        super(WidgetUpdater, self).__init__(**kwargs)
         
-    def update(self):
+    def update(self, *args):
         self.clear_output()
         with self:
             self._updater()       
