@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from collections.abc import Iterable
 from IPython.display import clear_output
 from ipywidgets import (Output, FloatSlider, IntSlider,
-                        Box, HBox, VBox, Layout, Checkbox,
+                        Box, HBox, VBox, Layout, Checkbox, Dropdown,
                         Button, HTML, Text, Label)
 import traitlets
 
@@ -57,6 +57,16 @@ def bool_make_canonical(key, default, desc=None, slargs=None, *args):
         raise ValueError("Too many options for a bool parameter")
     return default, desc, slargs
 
+def str_make_canonical(key, default, options, desc=None, slargs=None):
+    if desc is None:
+        desc = key
+    if slargs is None:
+        slargs = {}        
+    if not(all([type(option) is str for option in options])):
+        raise ValueError("Non-str in options")
+    return default, desc, options, slargs 
+
+
 class WidgetParbox(VBox):
     """ Parameter box widget.
         
@@ -71,7 +81,7 @@ class WidgetParbox(VBox):
             `(initial value, [min, max, step], [label])`
             The type of `initial_value` determines the control shown:
             float: FloatSlider
-            bool: Checkbox
+            ool: Checkbox
             TODO: add more
             Alternatively, one can pass any control widget that contains a value, e.g.
             `parameter = FloatSlider( ... )`
@@ -126,6 +136,16 @@ class WidgetParbox(VBox):
                                                   layout=Layout(width='50%', min_width='5in'),
                                                   **slargs
                                                 )
+                elif type(v[0]) is str:
+                    val, desc, options, slargs = str_make_canonical(k, *v)
+                    self._controls[k] = Dropdown(
+                        options=options,
+                        value=val,
+                        description=desc,
+                        disabled=False,
+                        style={'description_width': 'initial'}, 
+                        layout=Layout(width='50%', min_width='5in')
+                    )
                 else:
                     raise ValueError("Unsupported parameter type")
             else:
