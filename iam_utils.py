@@ -238,7 +238,10 @@ class WidgetCodeCheck(VBox):
         self._wci = wci
         self._demo = demo
         if demo is not None:
-            self._button = Button(description="Check & update")
+            if len(ref_values) == 0:
+                self._button = Button(description="Update")
+            else:
+                self._button = Button(description="Check & update")
         else:
             self._button = Button(description="Check")
             
@@ -262,6 +265,9 @@ class WidgetCodeCheck(VBox):
  
     def check(self):
         self._err.clear_output()
+        # do nothing if asked nothing
+        if len(self._ref_values) == 0:
+            return 
         nfail = 0
         allx = ()
         f_error = False
