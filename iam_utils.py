@@ -272,14 +272,19 @@ class WidgetCodeCheck(VBox):
         allx = ()
         f_error = False
         with self._err:
+            import sys
+            orig_stdout = sys.stdout
             try:
                 user_fun = self._wci.get_function_object()
                 for x, y in self._ref_values.items():
                     allx += x
+                    sys.stdout = open(os.devnull, 'w')
                     out = user_fun(*x)
+                    sys.stdout = orig_stdout
                     if not self._ref_match(y, out):
                         nfail += 1
             except Exception as e:
+                sys.stdout = orig_stdout
                 nfail = len(self._ref_values)
                 f_error = True
                 # because some errors in code widgets do not print the
