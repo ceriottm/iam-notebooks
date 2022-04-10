@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from collections.abc import Iterable
 from IPython.display import clear_output
 from ipywidgets import (Output, FloatSlider, IntSlider,
-                        Box, HBox, VBox, Layout, Checkbox,
+                        Box, HBox, VBox, Layout, Checkbox, Dropdown,
                         Button, HTML, Text, Label)
 import traitlets
 
@@ -57,6 +57,16 @@ def bool_make_canonical(key, default, desc=None, slargs=None, *args):
         raise ValueError("Too many options for a bool parameter")
     return default, desc, slargs
 
+def str_make_canonical(key, default, options, desc=None, slargs=None):
+    if desc is None:
+        desc = key
+    if slargs is None:
+        slargs = {}        
+    if not(all([type(option) is str for option in options])):
+        raise ValueError("Non-str in options")
+    return default, desc, options, slargs 
+
+
 class WidgetParbox(VBox):
     """ Parameter box widget.
         
@@ -71,7 +81,7 @@ class WidgetParbox(VBox):
             `(initial value, [min, max, step], [label])`
             The type of `initial_value` determines the control shown:
             float: FloatSlider
-            bool: Checkbox
+            ool: Checkbox
             TODO: add more
             Alternatively, one can pass any control widget that contains a value, e.g.
             `parameter = FloatSlider( ... )`
@@ -126,6 +136,16 @@ class WidgetParbox(VBox):
                                                   layout=Layout(width='50%', min_width='5in'),
                                                   **slargs
                                                 )
+                elif type(v[0]) is str:
+                    val, desc, options, slargs = str_make_canonical(k, *v)
+                    self._controls[k] = Dropdown(
+                        options=options,
+                        value=val,
+                        description=desc,
+                        disabled=False,
+                        style={'description_width': 'initial'}, 
+                        layout=Layout(width='50%', min_width='5in')
+                    )
                 else:
                     raise ValueError("Unsupported parameter type")
             else:
@@ -218,7 +238,10 @@ class WidgetCodeCheck(VBox):
         self._wci = wci
         self._demo = demo
         if demo is not None:
-            self._button = Button(description="Check & update")
+            if len(ref_values) == 0:
+                self._button = Button(description="Update")
+            else:
+                self._button = Button(description="Check & update")
         else:
             self._button = Button(description="Check")
             
@@ -242,18 +265,26 @@ class WidgetCodeCheck(VBox):
  
     def check(self):
         self._err.clear_output()
+        # do nothing if asked nothing
+        if len(self._ref_values) == 0:
+            return 
         nfail = 0
         allx = ()
         f_error = False
         with self._err:
+            import sys
+            orig_stdout = sys.stdout
             try:
                 user_fun = self._wci.get_function_object()
                 for x, y in self._ref_values.items():
                     allx += x
+                    sys.stdout = open(os.devnull, 'w')
                     out = user_fun(*x)
+                    sys.stdout = orig_stdout
                     if not self._ref_match(y, out):
                         nfail += 1
             except Exception as e:
+                sys.stdout = orig_stdout
                 nfail = len(self._ref_values)
                 f_error = True
                 # because some errors in code widgets do not print the
@@ -301,9 +332,9 @@ class WidgetUpdater(Output):
     
     def __init__(self, updater, **kwargs):
         self._updater = updater
-        super(WidgetUpdater, self).__init__()
+        super(WidgetUpdater, self).__init__(**kwargs)
         
-    def update(self):
+    def update(self, *args):
         self.clear_output()
         with self:
             self._updater()       
