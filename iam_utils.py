@@ -88,6 +88,8 @@ class WidgetParbox(VBox):
         onchange: function (default: None)
             If set, calls this function whenever the parameters are changed. Updates can be monitored
             also from outside, by observing the widget.
+        continuous_update: bool (default: False)
+            Whether to trigger an update when sliders are moved around or only when mouse is released
 
         Attributes
         ----------
@@ -109,7 +111,7 @@ class WidgetParbox(VBox):
     
     value = traitlets.Dict({}, sync=True)
     
-    def __init__(self, onchange=None, **kwargs):
+    def __init__(self, onchange=None, continuous_update=False, **kwargs):
         self._controls = {}
         for k, v in kwargs.items():
             if k == "onchange":
@@ -118,20 +120,20 @@ class WidgetParbox(VBox):
                 if type(v[0]) is float:
                     val, min, max, step, desc, slargs = float_make_canonical(k, *v)
                     self._controls[k] = FloatSlider( value=val, min=min, max=max, step=step,
-                                                    description=desc, continuous_update=False,
+                                                    description=desc, continuous_update=continuous_update,
                                                     style={'description_width': 'initial'}, 
                                                     layout=Layout(width='50%', min_width='5in'),
                                                     **slargs)   
                 elif type(v[0]) is int:
                     val, min, max, step, desc, slargs = int_make_canonical(k, *v)                    
                     self._controls[k] = IntSlider( value=val, min=min, max=max, step=step,
-                                                    description=desc, continuous_update=False, 
+                                                    description=desc, continuous_update=continuous_update, 
                                                     style={'description_width': 'initial'}, 
                                                     layout=Layout(width='50%', min_width='5in'),
                                                     **slargs)   
                 elif type(v[0]) is bool:
                     val, desc, slargs = bool_make_canonical(k, *v)
-                    self._controls[k] = Checkbox(value = val, description=desc, continuous_update=False, 
+                    self._controls[k] = Checkbox(value = val, description=desc, continuous_update=continuous_update, 
                                                   style={'description_width': 'initial'}, 
                                                   layout=Layout(width='50%', min_width='5in'),
                                                   **slargs
