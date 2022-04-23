@@ -229,10 +229,7 @@ class WidgetPlot(VBox):
         if self._pars is not None:
             self._plotter(self._ax, **self._pars.value, **self._args)
         else:
-            self._plotter(self._ax, **self._args)
-        #self._fig.canvas.draw()
-        #self._fig.canvas.flush_events()
-        
+            self._plotter(self._ax, **self._args)        
         
 class WidgetCodeCheck(VBox):
     def __init__(self, wci, ref_values, demo=None, ref_match=np.allclose):        
