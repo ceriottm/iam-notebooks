@@ -275,7 +275,11 @@ class WidgetCodeCheck(VBox):
             orig_stdout = sys.stdout
             try:
                 user_fun = self._wci.get_function_object()
-                for x, y in self._ref_values.items():
+                if isinstance(self._ref_values, dict):
+                    iterator = self._ref_values.items()
+                else:
+                    iterator = self._ref_values
+                for x, y in iterator:
                     allx += x
                     sys.stdout = open(os.devnull, 'w')
                     out = user_fun(*x)
