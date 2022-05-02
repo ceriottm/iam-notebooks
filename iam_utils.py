@@ -392,21 +392,33 @@ class WidgetDataDumper(VBox):
     def _load_all(self, change=""):
         self._clear_output()
         base_filename = self._prefix+"-"+self._sname.value.replace(" ","")
-        # considers all suffixes but is be problematic when you want to
-        # use the name "module_06-Name.json" "module_06-Name-first_solution.json"
-        # if you load "module_06-Name.json" then you also consider
-        # "module_06-Name-first_solution.json"
-        #m = re.compile(f'{base_filename}[\w\W]*.json')
-        m = re.compile(f'{base_filename}-{DATETIME_FORMAT_REGEX}.json')
-        considered_filenames = []
-        for filename in os.listdir():
-            if m.match(filename):
-                considered_filenames.append(filename)
-        if len(considered_filenames) == 0:
+        file_with_timestamp = re.compile(f'{DATETIME_FORMAT_REGEX}').match(base_filename.split("-")[-1])
+        if (file_with_timestamp):
+            jsname = base_filename + '.json'
+            if not(os.path.exists(jsname)):
+                with self._output:
+                    raise FileNotFoundError(f"Solution file {jsname}.json not found")
+                return
+        else:
             with self._output:
-                raise FileNotFoundError(f"Solution file {base_filename}-{DATETIME_FORMAT}.json not found")
-            return
-        jsname = sorted(considered_filenames)[-1]
+                print("No timestamp was specified, loading most recent version...")
+            # considers all suffixes but is be problematic when you want to
+            # use the name "module_06-Name.json" "module_06-Name-first_solution.json"
+            # if you load "module_06-Name.json" then you also consider
+            # "module_06-Name-first_solution.json"
+            #m = re.compile(f'{base_filename}[\w\W]*.json')
+            m = re.compile(f'{base_filename}-{DATETIME_FORMAT_REGEX}.json')
+
+            considered_filenames = []
+            for filename in os.listdir():
+                if m.match(filename):
+                    considered_filenames.append(filename)
+            if len(considered_filenames) == 0:
+                with self._output:
+                    raise FileNotFoundError(f"Solution file {base_filename}-{DATETIME_FORMAT}.json not found")
+                return
+            jsname = sorted(considered_filenames)[-1]
+
         js = json.load(open(jsname, "r"))
         for f_id, f_val in js.items():
             if not f_id in self._fields:
