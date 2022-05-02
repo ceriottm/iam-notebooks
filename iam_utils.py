@@ -10,8 +10,12 @@ from ipywidgets import (Output, FloatSlider, IntSlider,
                         Box, HBox, VBox, Layout, Checkbox, Dropdown,
                         Button, HTML, Text, Label)
 import traitlets
+import re
+from datetime import datetime
 
 global_variable = 1.0
+DATETIME_FORMAT = "%Y%m%dT%H%M%S"
+DATETIME_FORMAT_REGEX = "\d\d\d\d\d\d\d\dT\d\d\d\d\d\d"
 
 def float_make_canonical(key, default, minval=None, maxval=None, step=None, desc=None, slargs=None, *args):
     # gets the (possibly incomplete) options for a float value, and completes as needed
@@ -357,9 +361,13 @@ class WidgetDataDumper(VBox):
         js = dict()
         for f_id, f_val in self._fields.items():
             js[f_id] = getattr(f_val[0], f_val[1])
-        jsname = self._prefix+"-"+self._sname.value.replace(" ","")+".json"
+
+        time_stamp = datetime.now().strftime(DATETIME_FORMAT)
+        jsname = self._prefix+"-"+self._sname.value.replace(" ","")+"-"+time_stamp+".json"
         if not(os.path.exists(jsname)):
             json.dump(js, open(jsname, "w"))
+            with self._output:
+                print(f"Succesfully written file {jsname}")
         else:
             self._yes_overwrite_button = Button(description="Yes")
             self._no_overwrite_button = Button(description="No")
@@ -383,11 +391,22 @@ class WidgetDataDumper(VBox):
 
     def _load_all(self, change=""):
         self._clear_output()
-        jsname = self._prefix+"-"+self._sname.value.replace(" ","")+".json"
-        if not(os.path.exists(jsname)):
+        base_filename = self._prefix+"-"+self._sname.value.replace(" ","")
+        # considers all suffixes but is be problematic when you want to
+        # use the name "module_06-Name.json" "module_06-Name-first_solution.json"
+        # if you load "module_06-Name.json" then you also consider
+        # "module_06-Name-first_solution.json"
+        #m = re.compile(f'{base_filename}[\w\W]*.json')
+        m = re.compile(f'{base_filename}-{DATETIME_FORMAT_REGEX}.json')
+        considered_filenames = []
+        for filename in os.listdir():
+            if m.match(filename):
+                considered_filenames.append(filename)
+        if len(considered_filenames) == 0:
             with self._output:
-                raise FileNotFoundError(f"Solution file {jsname} not found")
+                raise FileNotFoundError(f"Solution file {base_filename}-{DATETIME_FORMAT}.json not found")
             return
+        jsname = sorted(considered_filenames)[-1]
         js = json.load(open(jsname, "r"))
         for f_id, f_val in js.items():
             if not f_id in self._fields:
