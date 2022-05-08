@@ -272,7 +272,6 @@ class WidgetCodeCheck(VBox):
         if len(self._ref_values) == 0:
             return 
         nfail = 0
-        allx = ()
         f_error = False
         with self._err:
             import sys
@@ -284,7 +283,6 @@ class WidgetCodeCheck(VBox):
                 else:
                     iterator = self._ref_values
                 for x, y in iterator:
-                    allx += x
                     sys.stdout = open(os.devnull, 'w')
                     out = user_fun(*x)
                     sys.stdout = orig_stdout
@@ -353,8 +351,6 @@ class WidgetDataDumper(VBox):
     """
     def _clear_output(self):
         self._output.clear_output()
-        self._overwrite_buttons.close()
-        self._overwrite_prompt.close()
 
     def _save_all(self, change=""):
         self._clear_output()
@@ -363,62 +359,25 @@ class WidgetDataDumper(VBox):
             js[f_id] = getattr(f_val[0], f_val[1])
 
         time_stamp = datetime.now().strftime(DATETIME_FORMAT)
-        jsname = self._prefix+"-"+self._sname.value.replace(" ","")+"-"+time_stamp+".json"
-        if not(os.path.exists(jsname)):
-            json.dump(js, open(jsname, "w"))
+        jsname = self._prefix+"-"+self._sname.value.replace(" ","")+".json"
+        if os.path.exists(jsname):
+            bupname = self._prefix+"-"+self._sname.value.replace(" ","")+"-backup_"+time_stamp+".json"
             with self._output:
-                print(f"Succesfully written file {jsname}")
-        else:
-            self._yes_overwrite_button = Button(description="Yes")
-            self._no_overwrite_button = Button(description="No")
-            self._overwrite_buttons = HBox([self._yes_overwrite_button, self._no_overwrite_button])
-            self._overwrite_prompt = Label(f"File {jsname} already exist. Should it be overwritten?")
-            def no_overwrite(change=""):
-                self._overwrite_prompt.close()
-                self._overwrite_buttons.close()
-                with self._output:
-                    print("Not written.")
-            def yes_overwrite(change=""):
-                json.dump(js, open(jsname, "w"))
-                self._overwrite_prompt.close()
-                self._overwrite_buttons.close()
-                with self._output:
-                    print(f"{jsname} overwritten.")
-            self._yes_overwrite_button.on_click(yes_overwrite)
-            self._no_overwrite_button.on_click(no_overwrite)
-            display(self._overwrite_prompt)
-            display(self._overwrite_buttons)
-
+                print(f"File {jsname} already exists.\nRenaming to {bupname}.")
+            os.rename(jsname, bupname)
+        
+        json.dump(js, open(jsname, "w"))
+        with self._output:
+            print(f"Succesfully saved answers to {jsname}")
+        
     def _load_all(self, change=""):
         self._clear_output()
-        base_filename = self._prefix+"-"+self._sname.value.replace(" ","")
-        file_with_timestamp = re.compile(f'{DATETIME_FORMAT_REGEX}').match(base_filename.split("-")[-1])
-        if (file_with_timestamp):
-            jsname = base_filename + '.json'
-            if not(os.path.exists(jsname)):
-                with self._output:
-                    raise FileNotFoundError(f"Solution file {jsname}.json not found")
-                return
-        else:
+        jsname = self._prefix+"-"+self._sname.value.replace(" ","")+".json"
+        if not(os.path.exists(jsname)):
             with self._output:
-                print("No timestamp was specified, loading most recent version...")
-            # considers all suffixes but is be problematic when you want to
-            # use the name "module_06-Name.json" "module_06-Name-first_solution.json"
-            # if you load "module_06-Name.json" then you also consider
-            # "module_06-Name-first_solution.json"
-            #m = re.compile(f'{base_filename}[\w\W]*.json')
-            m = re.compile(f'{base_filename}-{DATETIME_FORMAT_REGEX}.json')
-
-            considered_filenames = []
-            for filename in os.listdir():
-                if m.match(filename):
-                    considered_filenames.append(filename)
-            if len(considered_filenames) == 0:
-                with self._output:
-                    raise FileNotFoundError(f"Solution file {base_filename}-{DATETIME_FORMAT}.json not found")
-                return
-            jsname = sorted(considered_filenames)[-1]
-
+                raise FileNotFoundError(f"Solution file {jsname}.json not found")
+            return
+        
         js = json.load(open(jsname, "r"))
         for f_id, f_val in js.items():
             if not f_id in self._fields:
@@ -441,11 +400,6 @@ class WidgetDataDumper(VBox):
         self._output = Output(layout=Layout(width='100%', height='100%'))
         super(WidgetDataDumper, self).__init__(
                 [HBox([self._sname, self._bsave, self._bload]), self._output])
-
-        self._yes_overwrite_button = Button(description="Yes")
-        self._no_overwrite_button = Button(description="No")
-        self._overwrite_prompt = Label(f"")
-        self._overwrite_buttons = HBox([self._yes_overwrite_button, self._no_overwrite_button])
-    
+        
     def register_field(self, field_id, widget, trait):
         self._fields[field_id] = (widget, trait)
