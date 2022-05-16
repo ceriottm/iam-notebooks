@@ -373,14 +373,8 @@ class WidgetDataDumper(VBox):
     def _load_all(self, change=""):
         self._clear_output()
         base_filename = self._prefix+"-"+self._sname.value.replace(" ","")
-        file_with_timestamp = re.compile(f'{DATETIME_FORMAT_REGEX}').match(base_filename.split("-")[-1])
-        if (file_with_timestamp):
-            jsname = base_filename + '.json'
-            if not(os.path.exists(jsname)):
-                with self._output:
-                    raise FileNotFoundError(f"Solution file {jsname}.json not found")
-                return
-        else:
+        jsname = base_filename + '.json'
+        if not(os.path.exists(jsname)):
             with self._output:
                 raise FileNotFoundError(f"Solution file {jsname}.json not found")
             return
