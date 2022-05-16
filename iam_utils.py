@@ -372,7 +372,8 @@ class WidgetDataDumper(VBox):
         
     def _load_all(self, change=""):
         self._clear_output()
-        jsname = self._prefix+"-"+self._sname.value.replace(" ","")+".json"
+        base_filename = self._prefix+"-"+self._sname.value.replace(" ","")
+        jsname = base_filename + '.json'
         if not(os.path.exists(jsname)):
             with self._output:
                 raise FileNotFoundError(f"Solution file {jsname}.json not found")
