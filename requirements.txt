@@ -1,3 +1,4 @@
 chemiscope
 widget-code-input
 appmode
+jupyterlab-hide-code
