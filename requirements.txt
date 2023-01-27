@@ -1,4 +1,10 @@
-chemiscope
-widget-code-input
-appmode
+jupyterlab
+ipympl
+widget-code-input==3.1
 jupyterlab-hide-code
+ipywidgets
+numpy
+scipy
+matplotlib
+ase
+chemiscope
