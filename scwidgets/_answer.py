@@ -281,6 +281,7 @@ class AnswerRegistry(VBox):
             # outputs error at the widget where the save button is attached to
             with self._answer_widgets[answer_key].save_output:
                 raise FileNotFoundError(f"No file has been loaded.")
+            return False
         else:
             with open(self._answers_filename, "r") as answers_file:
                 answers = json.load(answers_file)
