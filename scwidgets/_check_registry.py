@@ -1,6 +1,7 @@
 import functools
 import ipywidgets
 import numpy as np
+from copy import deepcopy
 
 class CheckRegistry:
     def __init__(self):
@@ -127,7 +128,8 @@ class Check:
             raise ValueError("Reference outputs are None. Please first run comppute_and_set_reference_outputs or specify reference_outputs on initialization.")
         assert len(self._inputs_parameters) == len(self._reference_outputs), "number of inputs and reference outputs mismatching. Something went wrong in setting reference outputs"
         for i in range(len(self._reference_outputs)):
-            output = self._widget.compute_output(**self._inputs_parameters[i])
+            # requires deepcopy because test might change input
+            output = self._widget.compute_output(**deepcopy(self._inputs_parameters[i]}))
 
             if self._fingerprint is None:
                 #numeric = [int, float, np.floating ]
