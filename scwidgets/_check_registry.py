@@ -129,7 +129,7 @@ class Check:
         assert len(self._inputs_parameters) == len(self._reference_outputs), "number of inputs and reference outputs mismatching. Something went wrong in setting reference outputs"
         for i in range(len(self._reference_outputs)):
             # requires deepcopy because test might change input
-            output = self._widget.compute_output(**deepcopy(self._inputs_parameters[i]}))
+            output = self._widget.compute_output(**deepcopy(self._inputs_parameters[i]))
 
             if self._fingerprint is None:
                 #numeric = [int, float, np.floating ]
