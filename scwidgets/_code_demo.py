@@ -406,7 +406,6 @@ class CodeDemo(VBox, Answer):
         demo_widgets = []
         if self._code_input is not None:
             # TODO rm as widget code input changes
-            self._code_input.code_theme = 'default'
             code_input_panel = []
             if self.has_check_functionality():
                 self._code_input.observe(
