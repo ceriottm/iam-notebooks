@@ -8,3 +8,5 @@ scipy
 matplotlib
 ase
 chemiscope
+git+https://github.com/osscar-org/scicode-widgets.git
+tqdm
