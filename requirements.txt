@@ -10,5 +10,5 @@ jupyterlab-hide-code
 tqdm
 
 ase
-chemiscope
+chemiscope<=0.9
 scwidgets
