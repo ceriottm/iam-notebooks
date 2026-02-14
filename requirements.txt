@@ -6,10 +6,9 @@ scikit-learn
 jupyterlab
 ipywidgets
 ipympl
-widget-code-input==3.1
 jupyterlab-hide-code
 tqdm
 
 ase
 chemiscope
-git+https://github.com/osscar-org/scicode-widgets.git
+scwidgets
