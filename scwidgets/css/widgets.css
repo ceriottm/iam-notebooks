@@ -1,0 +1,132 @@
+/* scwidgets default cue box */
+
+.scwidget-cue-box {
+  border-left : 5px solid;
+  border-left-color: transparent;
+}
+
+.scwidget-cue-box--cue {
+  border-left : 5px solid;
+  border-left-color: #000000;
+}
+
+/* scwidgets save cue box */
+
+.scwidget-save-cue-box {
+  border-right : 5px solid;
+  border-right-color: transparent;
+}
+
+.scwidget-save-cue-box--cue {
+  border-right : 5px solid;
+  border-right-color: #f066f0;
+}
+
+/* scwidgets check cue box */
+
+.scwidget-check-cue-box {
+  border-left : 5px solid;
+  border-left-color: transparent;
+}
+
+.scwidget-check-cue-box--cue {
+  border-left : 5px solid;
+  border-left-color: #20b5e9;
+}
+
+/* scwidgets update cue box */
+
+.scwidget-update-cue-box {
+  border-left : 5px solid;
+  border-left-color: transparent;
+}
+
+.scwidget-update-cue-box--cue {
+  border-left : 5px solid;
+  border-left-color: #e95420;
+}
+
+/* scwidgets default reset cue button */
+
+.scwidget-reset-cue-button {
+    border :  3px solid;
+    border-color: #f4f2f0;
+    background-color: #f4f2f0;
+    height: auto;
+}
+
+.scwidget-reset-cue-button--cue {
+    background-color: #545352;
+    border-color: #545352;
+}
+
+/* scwidgets save reset cue button */
+
+.scwidget-save-reset-cue-button {
+    border :  3px solid;
+    border-color: #f4f2f0;
+    background-color: #f4f2f0;
+    height: auto;
+}
+
+.scwidget-save-reset-cue-button--cue {
+    background-color: #f066f0;
+    border-color: #f066f0;
+}
+
+/* scwidgets check reset cue button */
+
+.scwidget-check-reset-cue-button {
+    border :  3px solid;
+    border-color: #f4f2f0;
+    background-color: #f4f2f0;
+    height: auto;
+}
+
+.scwidget-check-reset-cue-button--cue {
+    background-color: #20b5e9;
+    border-color: #20b5e9;
+}
+
+/* scwidgets update reset cue button */
+
+.scwidget-update-reset-cue-button {
+    border :  3px solid;
+    border-color: #f4f2f0;
+    background-color: #f4f2f0;
+    height: auto;
+}
+
+.scwidget-update-reset-cue-button--cue {
+    background-color: #e95420;
+    border-color: #e95420;
+}
+
+/* scwidgets visualizer */
+
+.scwidget-cue-output {
+    opacity: 1.0;
+}
+
+.scwidget-cue-output--cue {
+    opacity: 0.4;
+}
+
+.exercise-title {
+  font-family: helvetica;
+  font-size: 150%;
+}
+.exercise-description {
+  font-family: helvetica;
+  font-size: 110%;
+  color: black;
+  word-spacing: 2px;
+}
+
+a {
+  color: blue;
+}
+
+a:hover {
+  color: lightblue;
+}
