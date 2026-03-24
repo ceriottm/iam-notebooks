@@ -73,6 +73,28 @@ def detect_code_demos(nb):
     return mapping
 
 
+def detect_exercise_order(cells):
+    order = []
+    seen = set()
+    for c in cells:
+        src = "".join(c.get("source", []))
+        matches = list(re.finditer(r"(\w+)\s*=\s*(CodeExercise|TextExercise)\(", src))
+        for idx, m in enumerate(matches):
+            end = matches[idx + 1].start() if idx + 1 < len(matches) else len(src)
+            block = src[m.start():end]
+            km = re.search(r'key\s*=\s*"([^"]+)"', block)
+            if not km:
+                continue
+            if "exercise_registry=exercise_registry" not in re.sub(r"\s+", "", block):
+                continue
+            key = km.group(1)
+            if key == "module-summary" or key in seen:
+                continue
+            seen.add(key)
+            order.append(key)
+    return order
+
+
 def remove_previous_patch(cells):
     out = []
     skip_summary_code = False
@@ -397,7 +419,21 @@ def _clone_outputs(student_widget):
             cloned.append(CueObject())
     return cloned if cloned else [CueObject()]
 
-def _make_display_codeexercise(template_widget, title, answer=None):
+def _copy_checks(source_widget, target_widget):
+    if source_widget._code is None or source_widget.check_registry is None:
+        return
+    for _check in source_widget.checks:
+        target_widget.check_registry.add_check(
+            target_widget,
+            _check.asserts,
+            _check.inputs_parameters,
+            _check.outputs_references,
+            _check.fingerprint,
+            getattr(_check, "_suppress_fingerprint_asserts", True),
+            getattr(_check, "_stop_on_assert_error_raised", False),
+        )
+
+def _make_display_codeexercise(template_widget, title, answer=None, enable_checks=False):
     from scwidgets.code import CodeInput
 
     # Build an independent code editor (avoid sharing widget state with student panel)
@@ -416,9 +452,11 @@ def _make_display_codeexercise(template_widget, title, answer=None):
 
     ref_params = _clone_parameters_panel(template_widget)
     outs = _clone_outputs(template_widget)
+    display_check_registry = CheckRegistry() if enable_checks and _sw_code is not None else None
 
     widget = CodeExercise(
         code=display_code,
+        check_registry=display_check_registry,
         outputs=outs,
         parameters=ref_params,
         update=template_widget._update_func,
@@ -426,6 +464,8 @@ def _make_display_codeexercise(template_widget, title, answer=None):
         description="",
         title=title,
     )
+    if display_check_registry is not None:
+        _copy_checks(template_widget, widget)
     if answer is not None:
         widget.answer = answer
     return widget
@@ -575,6 +615,7 @@ def _update_code_widget_panel(ex_key):
         template_widget,
         student_title,
         student_answer,
+        enable_checks=True,
     )
     container.children = [
         _widgets.HBox(
@@ -648,13 +689,18 @@ def add_text_panels(cells):
         cells.insert(pos, code_cell(f'display(_build_grading_panel("{key}"))'))
 
 
-def add_summary(cells):
+def add_summary(cells, exercise_order):
     cells.append(md_cell("## Grades Summary"))
-    cells.append(code_cell('''import pandas as _pd
+    cells.append(code_cell(f'''_EXERCISE_ORDER = {repr(exercise_order)}
+
+import pandas as _pd
 if _os.path.exists(_GRADES_CSV):
     _df = _pd.read_csv(_GRADES_CSV)
-    display(_df.pivot(index="student", columns="exercise", values="score"))
-    print(f"CSV path: {_os.path.abspath(_GRADES_CSV)}")
+    _pivot = _df.pivot(index="student", columns="exercise", values="score")
+    _ordered = [ex for ex in _EXERCISE_ORDER if ex in _pivot.columns]
+    _extras = [ex for ex in _pivot.columns if ex not in _ordered]
+    display(_pivot.reindex(columns=_ordered + _extras))
+    print(f"CSV path: {{_os.path.abspath(_GRADES_CSV)}}")
 else:
     print("No grades recorded yet.")'''))
 
@@ -685,11 +731,12 @@ def main():
     nb["cells"] = cells
 
     code_demo_to_key = detect_code_demos(nb)
+    exercise_order = detect_exercise_order(cells)
 
     insert_setup_and_nav(cells, module_prefix, submissions_dir, args.reference_dir, grades_csv)
     patch_code_displays(cells, code_demo_to_key)
     add_text_panels(cells)
-    add_summary(cells)
+    add_summary(cells, exercise_order)
 
     ta_path.write_text(json.dumps(nb, indent=1))
     print(f"Source kept: {src_path}")
