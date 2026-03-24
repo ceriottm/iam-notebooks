@@ -135,6 +135,7 @@ import ipywidgets as _widgets
 
 _MODULE_PREFIX = "{module_prefix}"
 _SUBMISSIONS_DIR = "{submissions_dir}"
+_TA_REVIEWS_DIR = _os.path.join(_SUBMISSIONS_DIR, "ta_reviews")
 _REFERENCE_DIR = "{reference_dir}"
 _GRADES_CSV = "{grades_csv}"
 
@@ -147,17 +148,156 @@ _student_names = []
 _student_answers_cache = {{}}
 
 _grades = {{}}
+_comments = {{}}
 if _os.path.exists(_GRADES_CSV):
     with open(_GRADES_CSV, newline="") as _f:
         for _row in _csv.DictReader(_f):
             _grades[(_row["student"], _row["exercise"])] = _row["score"]
+            _comments[(_row["student"], _row["exercise"])] = _row.get("comment", "")
+
+def _student_submission_path(name):
+    return _os.path.join(_SUBMISSIONS_DIR, f"{{_MODULE_PREFIX}}-{{name}}.json")
+
+def _student_review_path(name):
+    return _os.path.join(_TA_REVIEWS_DIR, f"{{_MODULE_PREFIX}}-{{name}}.json")
+
+def _student_active_path(name):
+    _review_path = _student_review_path(name)
+    if _os.path.exists(_review_path):
+        return _review_path
+    return _student_submission_path(name)
+
+def _extract_answer_fields(answer):
+    if not isinstance(answer, dict):
+        return {{}}
+    _fields = {{}}
+    for _key in ("textarea", "code", "parameters_panel", "selection"):
+        if _key in answer:
+            _fields[_key] = answer.get(_key)
+    return _fields
+
+def _format_code_comment_block(comment):
+    if not comment:
+        return ""
+    _lines = str(comment).splitlines()
+    _prefixed = ["# TA comment"] + [f"# {{line}}" if line else "#" for line in _lines]
+    return "\\n".join(_prefixed)
+
+def _merge_answer_with_comment(answer_fields, comment):
+    _entry = dict(answer_fields)
+    _comment = "" if comment is None else str(comment)
+
+    if "textarea" in _entry:
+        _base = (_entry.get("textarea") or "").rstrip()
+        if _comment:
+            _entry["textarea"] = f"{{_base}}\\n\\nTA comment:\\n{{_comment}}" if _base else f"TA comment:\\n{{_comment}}"
+        else:
+            _entry["textarea"] = _base
+
+    if "code" in _entry and _entry.get("code") is not None:
+        _base = (_entry.get("code") or "").rstrip()
+        if _comment:
+            _comment_block = _format_code_comment_block(_comment)
+            _entry["code"] = f"{{_base}}\\n\\n{{_comment_block}}\\n" if _base else f"{{_comment_block}}\\n"
+        else:
+            _entry["code"] = _base
+
+    return _entry
+
+def _normalize_loaded_answer(answer):
+    if not isinstance(answer, dict):
+        return answer
+    _raw = answer.get("ta_raw_answer")
+    if not isinstance(_raw, dict):
+        return answer
+    _normalized = dict(answer)
+    for _key, _value in _raw.items():
+        _normalized[_key] = _value
+    return _normalized
+
+def _load_student_file_raw(name):
+    _path = _student_active_path(name)
+    if not _os.path.exists(_path):
+        return {{}}
+    with open(_path) as _f:
+        return _json.load(_f)
+
+def _load_student_file(name):
+    _raw_answers = _load_student_file_raw(name)
+    return {{_k: _normalize_loaded_answer(_v) for _k, _v in _raw_answers.items()}}
 
 def _save_grades():
     with open(_GRADES_CSV, "w", newline="") as _f:
-        w = _csv.DictWriter(_f, fieldnames=["student", "exercise", "score"])
+        w = _csv.DictWriter(_f, fieldnames=["student", "exercise", "score", "comment"])
         w.writeheader()
-        for (stu, ex), score in sorted(_grades.items()):
-            w.writerow({{"student": stu, "exercise": ex, "score": score}})
+        for stu, ex in sorted(set(_grades) | set(_comments)):
+            w.writerow({{
+                "student": stu,
+                "exercise": ex,
+                "score": _grades.get((stu, ex), ""),
+                "comment": _comments.get((stu, ex), ""),
+            }})
+
+def _save_review(ex_key, score, comment):
+    name = _current_student()
+    if name is None:
+        raise ValueError("No student selected")
+    _grades[(name, ex_key)] = score
+    _comments[(name, ex_key)] = comment
+    _save_review_entry(ex_key, score=score, comment=comment)
+    _save_grades()
+    return name
+
+def _save_review_entry(ex_key, score=None, comment=None, answer=None):
+    name = _current_student()
+    if name is None:
+        raise ValueError("No student selected")
+    _answers = dict(_load_student_file_raw(name))
+    _existing = _answers.get(ex_key, {{}})
+    _existing_normalized = _normalize_loaded_answer(_existing)
+    _ta_comment = _existing.get("ta_comment", "") if isinstance(_existing, dict) else ""
+    _ta_score = _existing.get("ta_score", "") if isinstance(_existing, dict) else ""
+
+    if answer is not None:
+        _base_answer = _extract_answer_fields(answer)
+    elif isinstance(_existing_normalized, dict):
+        _base_answer = _extract_answer_fields(_existing_normalized)
+    else:
+        _base_answer = {{}}
+
+    _comment = _ta_comment if comment is None else comment
+    _score = _ta_score if score is None else score
+
+    _entry = _merge_answer_with_comment(_base_answer, _comment)
+
+    if _base_answer:
+        _entry["ta_raw_answer"] = _base_answer
+    if _comment is not None:
+        _entry["ta_comment"] = _comment
+    if _score is not None:
+        _entry["ta_score"] = _score
+
+    _answers[ex_key] = _entry
+
+    _os.makedirs(_TA_REVIEWS_DIR, exist_ok=True)
+    _fp = _student_review_path(name)
+    with open(_fp, "w") as _f:
+        _json.dump(_answers, _f, indent=2, ensure_ascii=False)
+        _f.write("\\n")
+
+    _student_answers_cache[name] = _answers
+    _current_student_answers["value"] = _answers
+    return name
+
+def _save_current_student_answer(ex_key):
+    if ex_key not in _code_widget_panels:
+        raise KeyError(f"Unknown code panel: {{ex_key}}")
+
+    _template_widget, _container, _student_widget = _code_widget_panels[ex_key]
+    if _student_widget is None:
+        raise ValueError(f"No loaded student widget for {{ex_key}}")
+
+    return _save_review_entry(ex_key, answer=_student_widget.answer)
 
 _ref_exercise_registry = ExerciseRegistry(filename_prefix=_MODULE_PREFIX)
 for _k in sorted(k for k in _required_keys if not k.endswith('-function')):
@@ -185,8 +325,7 @@ def _refresh_student_cache(force=False):
     _student_answers_cache = {{}}
     for _fp, _name in zip(_student_files, _student_names):
         try:
-            with open(_fp) as _f:
-                _student_answers_cache[_name] = _json.load(_f)
+            _student_answers_cache[_name] = _load_student_file(_name)
         except Exception:
             _student_answers_cache[_name] = {{}}
 
@@ -540,11 +679,20 @@ def _fmt_answer(data):
         parts.append(f'<div style="font-size:12px;color:#666;">params: {{data["parameters_panel"]}}</div>')
     return "\\n".join(parts) if parts else '<em style="color:#999;">(empty)</em>'
 
+def _comment_for(name, ex_key):
+    if not name:
+        return ""
+    _answer = _current_student_answers["value"].get(ex_key, {{}})
+    if isinstance(_answer, dict) and "ta_comment" in _answer:
+        return _answer.get("ta_comment", "")
+    return _comments.get((name, ex_key), "")
+
 def _build_grading_panel(ex_key):
     ref_html = _widgets.HTML(layout=_widgets.Layout(width="49%")); stu_html = _widgets.HTML(layout=_widgets.Layout(width="49%"))
     score_input = _widgets.Text(placeholder="Score", layout=_widgets.Layout(width="80px"))
-    save_btn = _widgets.Button(description="Save Score", button_style="success", layout=_widgets.Layout(width="110px"))
-    status = _widgets.HTML(layout=_widgets.Layout(width="320px"))
+    comment_input = _widgets.Textarea(placeholder="TA comment", layout=_widgets.Layout(width="100%", height="74px"))
+    save_btn = _widgets.Button(description="Save Review", button_style="success", layout=_widgets.Layout(width="110px"))
+    status = _widgets.HTML(layout=_widgets.Layout(width="420px"))
     prev_btn = _widgets.Button(description="◀ Prev", layout=_widgets.Layout(width="80px"))
     next_btn = _widgets.Button(description="Next ▶", layout=_widgets.Layout(width="80px"))
     stu_label = _widgets.HTML()
@@ -552,21 +700,22 @@ def _build_grading_panel(ex_key):
     def _on_save(_):
         name = _current_student()
         if name:
-            _grades[(name, ex_key)] = score_input.value; _save_grades()
-            status.value = f'<span style="color:green;">✅ {{name}} / {{ex_key}} = {{score_input.value}}</span>'
+            _save_review(ex_key, score_input.value, comment_input.value)
+            status.value = f'<span style="color:green;">✅ saved review for {{name}} / {{ex_key}}</span>'
     save_btn.on_click(_on_save)
     prev_btn.on_click(lambda _: (_switch_to(_student_idx["value"] - 1), _load_and_refresh_one(ex_key)))
     next_btn.on_click(lambda _: (_switch_to(_student_idx["value"] + 1), _load_and_refresh_one(ex_key)))
 
-    _grading_panels[ex_key] = (ref_html, stu_html, score_input, status, stu_label)
+    _grading_panels[ex_key] = (ref_html, stu_html, score_input, comment_input, status, stu_label)
     _update_grading_panel(ex_key)
     row = _widgets.HBox([prev_btn, stu_label, next_btn, _widgets.Label("Score:"), score_input, save_btn, status])
+    comment_box = _widgets.VBox([_widgets.HTML("<b>Comment</b>"), comment_input])
     comp = _widgets.HBox([ref_html, stu_html], layout=_widgets.Layout(width="100%", justify_content="space-between"))
-    return _widgets.VBox([row, comp], layout=_widgets.Layout(border="1px solid #eee", padding="8px", margin="4px 0"))
+    return _widgets.VBox([row, comment_box, comp], layout=_widgets.Layout(border="1px solid #eee", padding="8px", margin="4px 0"))
 
 def _update_grading_panel(ex_key):
     if ex_key not in _grading_panels: return
-    ref_html, stu_html, score_input, status, stu_label = _grading_panels[ex_key]
+    ref_html, stu_html, score_input, comment_input, status, stu_label = _grading_panels[ex_key]
     name = _current_student(); idx = _student_idx["value"]
     stu_label.value = f'<b>{{name or "N/A"}} ({{idx+1}}/{{len(_student_names)}})</b>'
     ref_data = _reference_answers.get(ex_key, {{}})
@@ -577,32 +726,52 @@ def _update_grading_panel(ex_key):
     stu_html.value = (f'<div style="border:1px solid #2196F3;border-radius:6px;padding:10px;min-height:80px;">'
                       f'<div style="font-weight:bold;color:#2196F3;margin-bottom:4px;">📘 Student ({{name or "N/A"}})</div>'
                       + _fmt_answer(stu_data) + '</div>')
-    score_input.value = _grades.get((name, ex_key), "") if name else ""; status.value = ""
+    score_input.value = _grades.get((name, ex_key), "") if name else ""
+    comment_input.value = _comment_for(name, ex_key)
+    status.value = ""
 
 def _build_code_score_panel(ex_key):
     score_input = _widgets.Text(placeholder="Score", layout=_widgets.Layout(width="80px"))
-    save_btn = _widgets.Button(description="Save Score", button_style="success", layout=_widgets.Layout(width="110px"))
-    status = _widgets.HTML(layout=_widgets.Layout(width="320px"))
+    comment_input = _widgets.Textarea(placeholder="TA comment", layout=_widgets.Layout(width="100%", height="74px"))
+    save_btn = _widgets.Button(description="Save Review", button_style="success", layout=_widgets.Layout(width="110px"))
+    save_answer_btn = _widgets.Button(description="Save Edited Answer", button_style="info", layout=_widgets.Layout(width="150px"))
+    status = _widgets.HTML(layout=_widgets.Layout(width="420px"))
     prev_btn = _widgets.Button(description="◀ Prev", layout=_widgets.Layout(width="80px"))
     next_btn = _widgets.Button(description="Next ▶", layout=_widgets.Layout(width="80px"))
     stu_label = _widgets.HTML()
-    save_btn.on_click(lambda _: (_grades.__setitem__((_current_student(), ex_key), score_input.value), _save_grades(), setattr(status, 'value', f'<span style="color:green;">✅ {{_current_student()}} / {{ex_key}} = {{score_input.value}}</span>')) if _current_student() else None)
+
+    def _on_save_review(_):
+        name = _current_student()
+        if name:
+            _save_review(ex_key, score_input.value, comment_input.value)
+            status.value = f'<span style="color:green;">✅ saved review for {{name}} / {{ex_key}}</span>'
+
+    def _on_save_answer(_):
+        name = _current_student()
+        if name:
+            _save_current_student_answer(ex_key)
+            status.value = f'<span style="color:green;">✅ saved edited answer for {{name}} / {{ex_key}}</span>'
+
+    save_btn.on_click(_on_save_review)
+    save_answer_btn.on_click(_on_save_answer)
     prev_btn.on_click(lambda _: (_switch_to(_student_idx["value"] - 1), _load_and_refresh_one(ex_key)))
     next_btn.on_click(lambda _: (_switch_to(_student_idx["value"] + 1), _load_and_refresh_one(ex_key)))
-    _code_score_panels[ex_key] = (score_input, status, stu_label)
+    _code_score_panels[ex_key] = (score_input, comment_input, status, stu_label)
     _update_code_score_panel(ex_key)
-    return _widgets.HBox([prev_btn, stu_label, next_btn, _widgets.Label("Score:"), score_input, save_btn, status])
+    row = _widgets.HBox([prev_btn, stu_label, next_btn, _widgets.Label("Score:"), score_input, save_btn, save_answer_btn, status])
+    comment_box = _widgets.VBox([_widgets.HTML("<b>Comment</b>"), comment_input])
+    return _widgets.VBox([row, comment_box])
 
 def _build_code_widget_panel(template_widget, ex_key):
     container = _widgets.VBox()
-    _code_widget_panels[ex_key] = (template_widget, container)
+    _code_widget_panels[ex_key] = (template_widget, container, None)
     _update_code_widget_panel(ex_key)
     return container
 
 def _update_code_widget_panel(ex_key):
     if ex_key not in _code_widget_panels:
         return
-    template_widget, container = _code_widget_panels[ex_key]
+    template_widget, container, _current_widget = _code_widget_panels[ex_key]
     ref_widget = _make_display_codeexercise(
         template_widget,
         "Reference",
@@ -623,13 +792,16 @@ def _update_code_widget_panel(ex_key):
             layout=_widgets.Layout(width="100%"),
         )
     ]
+    _code_widget_panels[ex_key] = (template_widget, container, student_widget)
 
 def _update_code_score_panel(ex_key):
     if ex_key not in _code_score_panels: return
-    score_input, status, stu_label = _code_score_panels[ex_key]
+    score_input, comment_input, status, stu_label = _code_score_panels[ex_key]
     name = _current_student(); idx = _student_idx["value"]
     stu_label.value = f'<b>{{name or "N/A"}} ({{idx+1}}/{{len(_student_names)}})</b>'
-    score_input.value = _grades.get((name, ex_key), "") if name else ""; status.value = ""
+    score_input.value = _grades.get((name, ex_key), "") if name else ""
+    comment_input.value = _comment_for(name, ex_key)
+    status.value = ""
 
 def _update_all_grading_panels():
     for k in list(_grading_panels.keys()): _update_grading_panel(k)
