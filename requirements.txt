@@ -6,9 +6,9 @@ scikit-learn
 jupyterlab
 ipywidgets
 ipympl
-jupyterlab-hide-code
+jupyterlab-hide-code>=4.1.3
 tqdm
 
 ase
-chemiscope<=0.9
-scwidgets
+chemiscope>=1.0
+scwidgets>=0.2.2
