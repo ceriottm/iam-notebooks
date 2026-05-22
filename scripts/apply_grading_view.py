@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# This is an AI generated script that modifies notebooks to create a "grading" version 
+# that facilitates going through a list of solutions from students
+
 import argparse
 import json
 import re
